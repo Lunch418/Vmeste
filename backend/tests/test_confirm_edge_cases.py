@@ -2,6 +2,9 @@ from datetime import datetime, timedelta
 
 from tests.conftest import register_user
 
+EVENT_LAT = 58.0104
+EVENT_LNG = 56.2502
+
 
 def make_future_event_payload(**overrides):
     payload = {
@@ -9,6 +12,8 @@ def make_future_event_payload(**overrides):
         "activity_type": "concert",
         "slots_total": 1,
         "deposit_amount": 50000,
+        "location_lat": EVENT_LAT,
+        "location_lng": EVENT_LNG,
     }
     payload.update(overrides)
     return payload
@@ -20,6 +25,8 @@ def make_past_event_payload(**overrides):
         "activity_type": "concert",
         "slots_total": 1,
         "deposit_amount": 50000,
+        "location_lat": EVENT_LAT,
+        "location_lng": EVENT_LNG,
     }
     payload.update(overrides)
     return payload
@@ -35,7 +42,7 @@ def test_selfie_confirm_before_meeting_time_rejected(client):
 
     resp = client.post(
         f"/events/{event['id']}/confirm/selfie",
-        json={"faces_detected": 2},
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert resp.status_code == 400
@@ -49,7 +56,7 @@ def test_selfie_confirm_zero_faces_rejected(client):
 
     resp = client.post(
         f"/events/{event['id']}/confirm/selfie",
-        json={"faces_detected": 0},
+        json={"faces_detected": 0, "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert resp.status_code == 400
@@ -66,7 +73,7 @@ def test_selfie_confirm_negative_faces_rejected(client):
 
     resp = client.post(
         f"/events/{event['id']}/confirm/selfie",
-        json={"faces_detected": -5},
+        json={"faces_detected": -5, "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert resp.status_code == 400
@@ -81,7 +88,7 @@ def test_selfie_confirm_by_non_participant_forbidden(client):
 
     resp = client.post(
         f"/events/{event['id']}/confirm/selfie",
-        json={"faces_detected": 2},
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=stranger,
     )
     assert resp.status_code == 403
@@ -92,11 +99,15 @@ def test_qr_scan_wrong_token_rejected(client):
     joiner = register_user(client, "+79990000410")
     event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
     client.post(f"/events/{event['id']}/join", headers=joiner)
-    client.post(f"/events/{event['id']}/confirm/qr/generate", headers=poster)
+    client.post(
+        f"/events/{event['id']}/confirm/qr/generate",
+        json={"lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=poster,
+    )
 
     resp = client.post(
         f"/events/{event['id']}/confirm/qr/scan",
-        json={"qr_token": "totally-wrong-token"},
+        json={"qr_token": "totally-wrong-token", "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert resp.status_code == 400
@@ -110,7 +121,7 @@ def test_qr_scan_without_generation_rejected(client):
 
     resp = client.post(
         f"/events/{event['id']}/confirm/qr/scan",
-        json={"qr_token": "anything"},
+        json={"qr_token": "anything", "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert resp.status_code == 400
@@ -122,19 +133,21 @@ def test_qr_scan_token_cannot_be_reused(client):
     event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
     client.post(f"/events/{event['id']}/join", headers=joiner)
     qr = client.post(
-        f"/events/{event['id']}/confirm/qr/generate", headers=poster
+        f"/events/{event['id']}/confirm/qr/generate",
+        json={"lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=poster,
     ).json()
 
     first = client.post(
         f"/events/{event['id']}/confirm/qr/scan",
-        json={"qr_token": qr["qr_token"]},
+        json={"qr_token": qr["qr_token"], "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert first.status_code == 200
 
     second = client.post(
         f"/events/{event['id']}/confirm/qr/scan",
-        json={"qr_token": qr["qr_token"]},
+        json={"qr_token": qr["qr_token"], "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=joiner,
     )
     assert second.status_code == 400
@@ -146,7 +159,11 @@ def test_qr_generate_by_non_poster_forbidden(client):
     event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
     client.post(f"/events/{event['id']}/join", headers=joiner)
 
-    resp = client.post(f"/events/{event['id']}/confirm/qr/generate", headers=joiner)
+    resp = client.post(
+        f"/events/{event['id']}/confirm/qr/generate",
+        json={"lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=joiner,
+    )
     assert resp.status_code == 403
 
 
@@ -200,13 +217,23 @@ def test_rating_for_nonexistent_user_id_rejected(client):
     joiner = register_user(client, "+79990000424")
     event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
     client.post(f"/events/{event['id']}/join", headers=joiner)
+    client.post(
+        f"/events/{event['id']}/confirm/selfie",
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=joiner,
+    )
+    client.post(
+        f"/events/{event['id']}/confirm/selfie",
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=poster,
+    )
 
     resp = client.post(
         f"/events/{event['id']}/rate",
         json={"rated_id": "does-not-exist", "stars": 5},
         headers=joiner,
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 400
 
 
 def test_self_rating_rejected(client):
@@ -239,11 +266,77 @@ def test_rating_before_meeting_time_rejected(client):
     assert resp.status_code == 400
 
 
+def test_rating_by_non_participant_forbidden(client):
+    poster = register_user(client, "+79990000429")
+    joiner = register_user(client, "+79990000430")
+    stranger = register_user(client, "+79990000431")
+    event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
+    client.post(f"/events/{event['id']}/join", headers=joiner)
+    poster_me = client.get("/users/me", headers=poster).json()
+
+    resp = client.post(
+        f"/events/{event['id']}/rate",
+        json={"rated_id": poster_me["id"], "stars": 5},
+        headers=stranger,
+    )
+    assert resp.status_code == 403
+
+
+def test_rating_joined_but_not_confirmed_forbidden(client):
+    """A joiner who never geo-confirmed arrival (still 'joined', not
+    'confirmed') cannot rate — rating is limited to people who actually
+    attended the meeting."""
+    poster = register_user(client, "+79990000432")
+    joiner = register_user(client, "+79990000433")
+    event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
+    client.post(f"/events/{event['id']}/join", headers=joiner)
+    poster_me = client.get("/users/me", headers=poster).json()
+
+    resp = client.post(
+        f"/events/{event['id']}/rate",
+        json={"rated_id": poster_me["id"], "stars": 5},
+        headers=joiner,
+    )
+    assert resp.status_code == 403
+
+
+def test_duplicate_rating_rejected(client):
+    poster = register_user(client, "+79990000434")
+    joiner = register_user(client, "+79990000435")
+    event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
+    client.post(f"/events/{event['id']}/join", headers=joiner)
+    client.post(
+        f"/events/{event['id']}/confirm/selfie",
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=joiner,
+    )
+    client.post(
+        f"/events/{event['id']}/confirm/selfie",
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
+        headers=poster,
+    )
+    poster_me = client.get("/users/me", headers=poster).json()
+
+    first = client.post(
+        f"/events/{event['id']}/rate",
+        json={"rated_id": poster_me["id"], "stars": 5},
+        headers=joiner,
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        f"/events/{event['id']}/rate",
+        json={"rated_id": poster_me["id"], "stars": 3},
+        headers=joiner,
+    )
+    assert second.status_code == 400
+
+
 def test_confirm_selfie_nonexistent_event_returns_404(client):
     headers = register_user(client, "+79990000428")
     resp = client.post(
         "/events/does-not-exist/confirm/selfie",
-        json={"faces_detected": 2},
+        json={"faces_detected": 2, "lat": EVENT_LAT, "lng": EVENT_LNG},
         headers=headers,
     )
     assert resp.status_code == 404

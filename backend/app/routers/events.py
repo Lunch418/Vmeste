@@ -112,6 +112,21 @@ def cancel_event(
     if event.poster_id != current_user.id:
         raise HTTPException(status_code=403, detail="Отменить может только автор")
     event.status = EventStatus.cancelled
+
+    # Возврат ещё не расчитанных депозитов — иначе они зависают в held
+    # навсегда (после отмены событие больше не проходит через confirm/
+    # archive пути расчёта).
+    held_participations = (
+        db.query(Participation)
+        .filter(Participation.event_id == event_id, Participation.status == ParticipationStatus.joined)
+        .all()
+    )
+    for p in held_participations:
+        if p.deposit and p.deposit.escrow_status == EscrowStatus.held:
+            p.deposit.escrow_status = EscrowStatus.refunded
+    if event.poster_deposit and event.poster_deposit.escrow_status == EscrowStatus.held:
+        event.poster_deposit.escrow_status = EscrowStatus.refunded
+
     db.commit()
     return None
 
@@ -129,6 +144,8 @@ def create_poster_deposit(
         raise HTTPException(status_code=404, detail="Событие не найдено")
     if event.poster_id != current_user.id:
         raise HTTPException(status_code=403, detail="Депозит вносит только автор события")
+    if event.status != EventStatus.active:
+        raise HTTPException(status_code=400, detail="Событие неактивно")
     if event.poster_deposit_id:
         raise HTTPException(status_code=400, detail="Депозит постера уже создан")
 
@@ -253,8 +270,8 @@ def leave_event(
     )
     if not participation:
         raise HTTPException(status_code=404, detail="Участие не найдено")
-    if participation.status == ParticipationStatus.cancelled:
-        raise HTTPException(status_code=400, detail="Участие уже отменено")
+    if participation.status != ParticipationStatus.joined:
+        raise HTTPException(status_code=400, detail="Участие уже обработано, отменить нельзя")
     event = db.query(Event).filter(Event.id == event_id).first()
     participation.status = ParticipationStatus.cancelled
     if event and event.slots_taken > 0:

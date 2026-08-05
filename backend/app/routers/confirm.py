@@ -52,17 +52,23 @@ def _check_window_and_geo(event: Event, lat: float, lng: float) -> None:
         )
 
 
-def _get_event_or_404(db: Session, event_id: str) -> Event:
-    event = db.query(Event).filter(Event.id == event_id).first()
+def _get_event_locked_or_404(db: Session, event_id: str) -> Event:
+    """Блокирует строку события на время расчёта эскроу — без этого
+    параллельные запросы (постер и джойнер почти одновременно, или
+    ручной resolve-no-show против фонового archive_expired_events) могут
+    оба пройти проверки состояния до того, как другой закоммитит свои
+    изменения, и посчитать один и тот же депозит дважды/противоречиво."""
+    event = db.query(Event).filter(Event.id == event_id).with_for_update().first()
     if not event:
         raise HTTPException(status_code=404, detail="Событие не найдено")
     return event
 
 
-def _get_own_joined_participation(db: Session, event_id: str, user_id: str) -> Participation:
+def _get_own_joined_participation_locked(db: Session, event_id: str, user_id: str) -> Participation:
     participation = (
         db.query(Participation)
         .filter(Participation.event_id == event_id, Participation.user_id == user_id)
+        .with_for_update()
         .first()
     )
     if not participation:
@@ -72,7 +78,7 @@ def _get_own_joined_participation(db: Session, event_id: str, user_id: str) -> P
     return participation
 
 
-def _settle_participation(db: Session, participation: Participation, confirmed: bool, reason: Optional[str] = None):
+def _settle_participation(participation: Participation, confirmed: bool, reason: Optional[str] = None):
     participation.status = ParticipationStatus.confirmed if confirmed else ParticipationStatus.no_show
     if reason:
         participation.no_show_reason = reason
@@ -81,7 +87,6 @@ def _settle_participation(db: Session, participation: Participation, confirmed: 
         deposit.escrow_status = (
             EscrowStatus.released_to_payer if confirmed else EscrowStatus.released_to_poster
         )
-    db.commit()
 
 
 def _settle_pending_joiners(db: Session, event: Event) -> None:
@@ -93,25 +98,24 @@ def _settle_pending_joiners(db: Session, event: Event) -> None:
             Participation.status == ParticipationStatus.joined,
             Participation.joiner_arrived_at.isnot(None),
         )
+        .with_for_update()
         .all()
     )
     for p in pending:
-        _settle_participation(db, p, confirmed=True)
+        _settle_participation(p, confirmed=True)
 
 
 def _mark_poster_arrived(db: Session, event: Event) -> None:
     if event.poster_arrived_at is None:
         event.poster_arrived_at = datetime.utcnow()
-        db.commit()
     _settle_pending_joiners(db, event)
 
 
-def _mark_joiner_arrived(db: Session, event: Event, participation: Participation) -> str:
+def _mark_joiner_arrived(event: Event, participation: Participation) -> str:
     if participation.joiner_arrived_at is None:
         participation.joiner_arrived_at = datetime.utcnow()
-        db.commit()
     if event.poster_arrived_at is not None:
-        _settle_participation(db, participation, confirmed=True)
+        _settle_participation(participation, confirmed=True)
         return "confirmed"
     return "waiting_for_organizer"
 
@@ -123,17 +127,19 @@ def confirm_selfie(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event = _get_event_or_404(db, event_id)
+    event = _get_event_locked_or_404(db, event_id)
     _check_window_and_geo(event, payload.lat, payload.lng)
     if payload.faces_detected < 2:
         raise HTTPException(status_code=400, detail="Для подтверждения нужно 2 лица в кадре")
 
     if current_user.id == event.poster_id:
         _mark_poster_arrived(db, event)
+        db.commit()
         return {"status": "organizer_arrived"}
 
-    participation = _get_own_joined_participation(db, event_id, current_user.id)
-    status_ = _mark_joiner_arrived(db, event, participation)
+    participation = _get_own_joined_participation_locked(db, event_id, current_user.id)
+    status_ = _mark_joiner_arrived(event, participation)
+    db.commit()
     return {"status": status_}
 
 
@@ -144,11 +150,12 @@ def generate_qr(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event = _get_event_or_404(db, event_id)
+    event = _get_event_locked_or_404(db, event_id)
     if event.poster_id != current_user.id:
         raise HTTPException(status_code=403, detail="QR генерирует только постер")
     _check_window_and_geo(event, payload.lat, payload.lng)
     _mark_poster_arrived(db, event)
+    db.commit()
     token = secrets.token_urlsafe(16)
     _qr_tokens[event_id] = token
     return QrGenerateOut(qr_token=token)
@@ -161,15 +168,16 @@ def scan_qr(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event = _get_event_or_404(db, event_id)
+    event = _get_event_locked_or_404(db, event_id)
     _check_window_and_geo(event, payload.lat, payload.lng)
     expected = _qr_tokens.get(event_id)
     if not expected or expected != payload.qr_token:
         raise HTTPException(status_code=400, detail="Неверный или истёкший QR-код")
     del _qr_tokens[event_id]
 
-    participation = _get_own_joined_participation(db, event_id, current_user.id)
-    status_ = _mark_joiner_arrived(db, event, participation)
+    participation = _get_own_joined_participation_locked(db, event_id, current_user.id)
+    status_ = _mark_joiner_arrived(event, participation)
+    db.commit()
     return {"status": status_}
 
 
@@ -181,9 +189,12 @@ def resolve_no_show(
     db: Session = Depends(get_db),
 ):
     """Грейс-период истёк, вторая сторона не отметилась — доступна компенсация."""
-    event = _get_event_or_404(db, event_id)
+    event = _get_event_locked_or_404(db, event_id)
     participation = (
-        db.query(Participation).filter(Participation.id == payload.participation_id).first()
+        db.query(Participation)
+        .filter(Participation.id == payload.participation_id)
+        .with_for_update()
+        .first()
     )
     if not participation or participation.event_id != event_id:
         raise HTTPException(status_code=404, detail="Участие не найдено")
@@ -202,7 +213,7 @@ def resolve_no_show(
         if now < participation.joiner_arrived_at + grace:
             raise HTTPException(status_code=400, detail="Ещё рано — подождите грейс-период")
 
-        _settle_participation(db, participation, confirmed=False, reason="poster_absent")
+        _settle_participation(participation, confirmed=False, reason="poster_absent")
         # свой депозит — назад
         if participation.deposit and participation.deposit.escrow_status == EscrowStatus.released_to_poster:
             participation.deposit.escrow_status = EscrowStatus.refunded
@@ -222,7 +233,8 @@ def resolve_no_show(
         if now < event.poster_arrived_at + grace:
             raise HTTPException(status_code=400, detail="Ещё рано — подождите грейс-период")
 
-        _settle_participation(db, participation, confirmed=False, reason="joiner_absent")
+        _settle_participation(participation, confirmed=False, reason="joiner_absent")
+        db.commit()
         return {"status": "compensated", "reason": "joiner_absent"}
 
     raise HTTPException(status_code=403, detail="Нет доступа")
@@ -242,6 +254,37 @@ def rate_participant(
         raise HTTPException(status_code=400, detail="Оценка доступна только после встречи")
     if payload.rated_id == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя оценить самого себя")
+
+    def _participated(user_id: str) -> bool:
+        if user_id == event.poster_id:
+            return True
+        return (
+            db.query(Participation)
+            .filter(
+                Participation.event_id == event_id,
+                Participation.user_id == user_id,
+                Participation.status == ParticipationStatus.confirmed,
+            )
+            .first()
+            is not None
+        )
+
+    if not _participated(current_user.id):
+        raise HTTPException(status_code=403, detail="Оценивать можно только встречи, в которых вы участвовали")
+    if not _participated(payload.rated_id):
+        raise HTTPException(status_code=400, detail="Этот пользователь не участвовал в данной встрече")
+
+    existing = (
+        db.query(Rating)
+        .filter(
+            Rating.event_id == event_id,
+            Rating.rater_id == current_user.id,
+            Rating.rated_id == payload.rated_id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Вы уже оценили этого пользователя за эту встречу")
 
     rated_user = db.query(User).filter(User.id == payload.rated_id).first()
     if not rated_user:

@@ -69,7 +69,7 @@ export function AuthFlow() {
         </svg>
       </div>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1.05, marginBottom: 4 }}>
-        Togethr
+        Together
       </div>
       <div
         style={{
