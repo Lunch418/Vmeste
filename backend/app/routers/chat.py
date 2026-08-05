@@ -95,7 +95,7 @@ async def chat_ws(websocket: WebSocket, event_id: str, token: str = Query(...)):
         try:
             while True:
                 data = await websocket.receive_json()
-                text = data.get("text", "").strip()
+                text = str(data.get("text", "")).strip()[:2000]
                 if not text:
                     continue
                 message = Message(event_id=event_id, sender_id=user_id, text=text)

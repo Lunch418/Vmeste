@@ -27,11 +27,11 @@ class TokenResponse(BaseModel):
 
 # --- Users ---
 class UserProfileUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=100)
     age: Optional[int] = None
     gender: Optional[Literal["male", "female"]] = None
-    city: Optional[str] = None
-    avatar_url: Optional[str] = None
+    city: Optional[str] = Field(default=None, max_length=100)
+    avatar_url: Optional[str] = Field(default=None, max_length=2000)
     interests: Optional[List[str]] = None
 
 
@@ -67,22 +67,22 @@ class UserOut(BaseModel):
 
 class ReportCreate(BaseModel):
     event_id: Optional[str] = None
-    reason: str
+    reason: str = Field(max_length=2000)
 
 
 # --- Events ---
 class EventCreate(BaseModel):
-    photo_url: Optional[str] = None
-    activity_type: str
+    photo_url: Optional[str] = Field(default=None, max_length=2000)
+    activity_type: str = Field(max_length=50)
     datetime_: datetime = Field(alias="datetime")
     location_lat: Optional[float] = None
     location_lng: Optional[float] = None
-    location_address: Optional[str] = None
+    location_address: Optional[str] = Field(default=None, max_length=300)
     age_min: int = Field(default=18, ge=0, le=120)
     age_max: int = Field(default=99, ge=0, le=120)
     gender_filter: GenderFilter = GenderFilter.any
     slots_total: int = Field(default=1, ge=1)
-    description: str = ""
+    description: str = Field(default="", max_length=5000)
     deposit_amount: int = Field(ge=0)
 
     model_config = {"populate_by_name": True}
@@ -95,10 +95,10 @@ class EventCreate(BaseModel):
 
 
 class EventUpdate(BaseModel):
-    photo_url: Optional[str] = None
+    photo_url: Optional[str] = Field(default=None, max_length=2000)
     datetime_: Optional[datetime] = Field(default=None, alias="datetime")
-    location_address: Optional[str] = None
-    description: Optional[str] = None
+    location_address: Optional[str] = Field(default=None, max_length=300)
+    description: Optional[str] = Field(default=None, max_length=5000)
 
     model_config = {"populate_by_name": True}
 
@@ -157,7 +157,7 @@ class DepositOut(BaseModel):
 
 # --- Chat ---
 class MessageCreate(BaseModel):
-    text: str
+    text: str = Field(max_length=2000)
 
 
 class MessageOut(BaseModel):
@@ -173,7 +173,7 @@ class MessageOut(BaseModel):
 # --- Meeting confirmation ---
 class SelfieConfirm(BaseModel):
     faces_detected: int
-    filter_name: Optional[str] = None
+    filter_name: Optional[str] = Field(default=None, max_length=50)
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
 
@@ -200,7 +200,7 @@ class ResolveNoShow(BaseModel):
 class RatingCreate(BaseModel):
     rated_id: str
     stars: int = Field(ge=1, le=5)
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(default=None, max_length=2000)
 
 
 class RatingOut(BaseModel):

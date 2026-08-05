@@ -12,7 +12,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/phone", status_code=204)
 def request_code(payload: PhoneRequest):
-    sms.generate_and_send_code(payload.phone)
+    try:
+        sms.generate_and_send_code(payload.phone)
+    except sms.RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
     return None
 
 

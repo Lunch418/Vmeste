@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic_settings import BaseSettings
 
 
@@ -5,6 +7,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./vmeste.db"
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "dev-secret-change-in-production"
+    cors_allowed_origins: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 30
     allowed_city: str = "Пермь"
