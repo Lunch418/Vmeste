@@ -79,7 +79,10 @@ export function ChatScreen() {
             <path d="M15 19l-7-7 7-7" stroke="var(--text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div style={{ flex: 1 }}>
+        <div
+          style={{ flex: 1, cursor: event && user?.id !== event.poster_id ? 'pointer' : 'default' }}
+          onClick={() => event && user?.id !== event.poster_id && navigate(`/users/${event.poster_id}`)}
+        >
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 16 }}>{event?.activity_type ?? 'Чат'}</div>
           <div className="text-secondary" style={{ fontSize: 11 }}>
             {event ? new Date(event.datetime).toLocaleString('ru-RU') : ''}
@@ -114,6 +117,7 @@ export function ChatScreen() {
           return (
             <div
               key={m.id}
+              onClick={() => !mine && navigate(`/users/${m.sender_id}`)}
               style={{
                 alignSelf: mine ? 'flex-end' : 'flex-start',
                 maxWidth: '78%',
@@ -123,6 +127,7 @@ export function ChatScreen() {
                 lineHeight: 1.4,
                 background: mine ? 'var(--accent)' : 'var(--surface)',
                 color: mine ? 'var(--on-accent)' : 'var(--text)',
+                cursor: mine ? 'default' : 'pointer',
               }}
             >
               {m.text}

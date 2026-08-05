@@ -121,6 +121,8 @@ class EventOut(BaseModel):
     deposit_amount: int
     status: EventStatus
     city: str
+    poster_arrived_at: Optional[datetime]
+    poster_deposit_id: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -132,6 +134,8 @@ class ParticipationOut(BaseModel):
     user_id: str
     status: ParticipationStatus
     deposit_id: Optional[str]
+    joiner_arrived_at: Optional[datetime]
+    no_show_reason: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -170,6 +174,13 @@ class MessageOut(BaseModel):
 class SelfieConfirm(BaseModel):
     faces_detected: int
     filter_name: Optional[str] = None
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
+class QrGenerate(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
 
 
 class QrGenerateOut(BaseModel):
@@ -178,9 +189,25 @@ class QrGenerateOut(BaseModel):
 
 class QrScan(BaseModel):
     qr_token: str
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
+class ResolveNoShow(BaseModel):
+    participation_id: str
 
 
 class RatingCreate(BaseModel):
     rated_id: str
     stars: int = Field(ge=1, le=5)
     comment: Optional[str] = None
+
+
+class RatingOut(BaseModel):
+    id: str
+    event_id: str
+    rater_id: str
+    rater_name: Optional[str]
+    stars: int
+    comment: Optional[str]
+    created_at: datetime

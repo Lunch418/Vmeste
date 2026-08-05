@@ -1,9 +1,11 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Block, Report, User
-from app.schemas import ReportCreate, UserOut, UserProfileUpdate
+from app.models import Block, Rating, Report, User
+from app.schemas import RatingOut, ReportCreate, UserOut, UserProfileUpdate
 from app.security import get_current_user
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -36,6 +38,31 @@ def get_user(user_id: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     return UserOut.from_model(user)
+
+
+@router.get("/{user_id}/ratings", response_model=List[RatingOut])
+def get_user_ratings(user_id: str, db: Session = Depends(get_db)):
+    ratings = (
+        db.query(Rating)
+        .filter(Rating.rated_id == user_id)
+        .order_by(Rating.created_at.desc())
+        .all()
+    )
+    result = []
+    for r in ratings:
+        rater = db.query(User).filter(User.id == r.rater_id).first()
+        result.append(
+            RatingOut(
+                id=r.id,
+                event_id=r.event_id,
+                rater_id=r.rater_id,
+                rater_name=rater.name if rater else None,
+                stars=r.stars,
+                comment=r.comment,
+                created_at=r.created_at,
+            )
+        )
+    return result
 
 
 @router.post("/{user_id}/report", status_code=204)

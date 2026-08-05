@@ -1,12 +1,14 @@
 export function StarRating({
   value,
   onChange,
+  size = 34,
 }: {
   value: number;
   onChange?: (v: number) => void;
+  size?: number;
 }) {
   return (
-    <div style={{ display: 'flex', gap: 10 }}>
+    <div style={{ display: 'flex', gap: size < 24 ? 3 : 10 }}>
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
@@ -18,7 +20,7 @@ export function StarRating({
             transform: n <= value ? 'scale(1.15)' : 'scale(1)',
           }}
         >
-          <svg width="34" height="34" viewBox="0 0 24 24" fill={n <= value ? 'var(--accent)' : 'none'}>
+          <svg width={size} height={size} viewBox="0 0 24 24" fill={n <= value ? 'var(--accent)' : 'none'}>
             <path
               d="M12 2l3.1 6.7 7.4.9-5.5 5 1.6 7.3L12 18.3 5.4 21.9 7 14.6 1.5 9.6l7.4-.9z"
               stroke="var(--accent)"

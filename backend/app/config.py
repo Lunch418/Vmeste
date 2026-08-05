@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24 * 30
     allowed_city: str = "Пермь"
     meeting_confirm_window_minutes: int = 120
+    no_show_grace_minutes: int = 15
+    arrival_radius_meters: float = 150.0
 
     class Config:
         env_file = ".env"

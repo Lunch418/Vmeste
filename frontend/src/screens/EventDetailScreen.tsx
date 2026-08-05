@@ -3,9 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { activityHue } from '../activity';
+import { DepositSheet, type SheetPhase } from '../components/DepositSheet';
 import type { EventItem, User } from '../api/types';
-
-type SheetPhase = 'none' | 'idle' | 'processing' | 'success';
 
 function formatDeposit(kopecks: number) {
   return `${(kopecks / 100).toLocaleString('ru-RU')} ₽`;
@@ -58,7 +57,6 @@ export function EventDetailScreen() {
   const isPoster = user?.id === event.poster_id;
   const full = event.slots_taken >= event.slots_total;
   const hue = activityHue(event.activity_type);
-  const sheetOpen = sheetPhase !== 'none';
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -116,6 +114,7 @@ export function EventDetailScreen() {
 
           {poster && (
             <div
+              onClick={() => navigate(`/users/${poster.id}`)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -124,6 +123,7 @@ export function EventDetailScreen() {
                 background: 'var(--surface)',
                 borderRadius: 18,
                 marginBottom: 16,
+                cursor: 'pointer',
               }}
             >
               <div
@@ -144,7 +144,7 @@ export function EventDetailScreen() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{poster.name ?? 'Без имени'}</div>
-                <div className="text-secondary">организатор события</div>
+                <div className="text-secondary">организатор события · открыть профиль</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--money)', fontWeight: 700, fontSize: 14 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent)">
@@ -152,6 +152,17 @@ export function EventDetailScreen() {
                 </svg>
                 {poster.rating_avg.toFixed(1)}
               </div>
+            </div>
+          )}
+
+          {isPoster && (
+            <div className="text-secondary" style={{ marginBottom: 16, fontSize: 13 }}>
+              Ваш депозит-гарантия:{' '}
+              {event.poster_deposit_id ? (
+                <span style={{ color: 'var(--accent-2)', fontWeight: 700 }}>внесён</span>
+              ) : (
+                <span style={{ color: 'var(--error)', fontWeight: 700 }}>не внесён</span>
+              )}
             </div>
           )}
 
@@ -200,86 +211,14 @@ export function EventDetailScreen() {
         )}
       </div>
 
-      {sheetOpen && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(32,30,29,0.4)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            zIndex: 30,
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              background: 'var(--bg)',
-              borderRadius: '28px 28px 0 0',
-              padding: '18px 22px 34px',
-            }}
-          >
-            <div style={{ width: 44, height: 5, borderRadius: 999, background: 'var(--border)', margin: '0 auto 18px' }} />
-
-            {sheetPhase === 'idle' && (
-              <>
-                <h2 style={{ marginBottom: 6 }}>Депозит-гарантия</h2>
-                <p className="text-secondary" style={{ marginBottom: 18, lineHeight: 1.5 }}>
-                  Спишем {formatDeposit(event.deposit_amount)} — вернём сразу после подтверждённой встречи. Если не
-                  придёшь без причины, депозит уйдёт организатору.
-                </p>
-                <button onClick={payDeposit} style={{ width: '100%', marginBottom: 10 }}>
-                  Оплатить {formatDeposit(event.deposit_amount)}
-                </button>
-                <button className="ghost" onClick={closeSheet} style={{ width: '100%' }}>
-                  Отмена
-                </button>
-              </>
-            )}
-
-            {sheetPhase === 'processing' && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0' }}>
-                <div
-                  style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 999,
-                    border: '4px solid var(--money-bg)',
-                    borderTopColor: 'var(--accent)',
-                    animation: 'spin 0.8s linear infinite',
-                    marginBottom: 16,
-                  }}
-                />
-                <p className="text-secondary">Проводим оплату через ЮKassa…</p>
-              </div>
-            )}
-
-            {sheetPhase === 'success' && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0 8px' }}>
-                <div
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 999,
-                    background: 'var(--accent-2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 14,
-                    animation: 'pop-in 0.5s cubic-bezier(.34,1.56,.64,1)',
-                  }}
-                >
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 13l4 4L19 7" stroke="var(--tag-bg)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <h2 style={{ marginBottom: 4 }}>Депозит в резерве</h2>
-                <p className="text-secondary">Открываем чат с организатором…</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <DepositSheet
+        phase={sheetPhase}
+        amount={event.deposit_amount}
+        description={`Спишем ${formatDeposit(event.deposit_amount)} — вернём сразу после подтверждённой встречи. Если не придёшь без причины, депозит уйдёт организатору.`}
+        successSubtitle="Открываем чат с организатором…"
+        onPay={payDeposit}
+        onClose={closeSheet}
+      />
 
       {error && (
         <p style={{ color: 'var(--error)', position: 'absolute', bottom: 90, left: 20, right: 20, textAlign: 'center' }}>
