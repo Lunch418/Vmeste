@@ -1,0 +1,31 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://vmeste:vmeste@postgres:5432/vmeste
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: dev-secret-change-in-production
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vmeste
+      POSTGRES_PASSWORD: vmeste
+      POSTGRES_DB: vmeste
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
