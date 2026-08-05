@@ -6,10 +6,16 @@
   max-width: 480px;
   margin: 0 auto;
   display: flex;
-  background: var(--surface);
+  background: rgba(245, 234, 216, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid var(--border);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px);
   z-index: 10;
+}
+
+:root[data-theme='dark'] .tab-bar {
+  background: rgba(21, 18, 26, 0.9);
 }
 
 @media (min-width: 1024px) {
@@ -22,6 +28,8 @@
     border-right: 1px solid var(--border);
     padding: var(--space-4);
     gap: var(--space-2);
+    background: transparent;
+    backdrop-filter: none;
   }
 }
 
@@ -30,11 +38,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: var(--space-2) 0;
+  gap: 3px;
+  padding: 6px 0;
   text-decoration: none;
+  color: rgba(32, 30, 29, 0.45);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+:root[data-theme='dark'] .tab-bar__item {
   color: var(--text-secondary);
-  font-size: 12px;
 }
 
 @media (min-width: 1024px) {
@@ -49,9 +62,18 @@
 }
 
 .tab-bar__item--active {
+  color: var(--money);
+}
+
+:root[data-theme='dark'] .tab-bar__item--active {
   color: var(--accent);
 }
 
 .tab-bar__icon {
-  font-size: 20px;
+  display: flex;
+  transition: transform 0.15s ease;
+}
+
+.tab-bar__item--active .tab-bar__icon {
+  transform: scale(1.08);
 }

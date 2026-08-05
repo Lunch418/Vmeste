@@ -17,8 +17,8 @@ export default defineConfig({
         name: 'Вместе',
         short_name: 'Вместе',
         description: 'Платформа для поиска компании на совместные активности',
-        theme_color: '#ff5c2b',
-        background_color: '#15121a',
+        theme_color: '#c67139',
+        background_color: '#f5ead8',
         display: 'standalone',
         start_url: '/',
         icons: [

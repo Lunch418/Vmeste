@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './context/AuthContext'
+import { applyTheme, getStoredTheme } from './theme'
+
+applyTheme(getStoredTheme())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

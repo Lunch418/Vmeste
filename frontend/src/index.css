@@ -1,16 +1,60 @@
-/* Палитра — см. specs/COMPONENTS.md. Тёмная тема — основная. */
+/* Палитра — дизайн Vmeste.dc.html (Claude Design). Тёплая светлая — основная,
+   старая тёмная (specs/COMPONENTS.md) — альтернатива через [data-theme="dark"]. */
+
+@font-face {
+  font-family: 'Caprasimo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/caprasimo-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: 'Caprasimo';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/caprasimo-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+2020;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/figtree-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/figtree-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+2020;
+}
+
 :root {
-  --accent: #ff5c2b;
-  --accent-pressed: #e64a1b;
-  --bg: #15121a;
-  --surface: #211c29;
-  --surface-raised: #2b2433;
-  --text: #f5f1ee;
-  --text-secondary: #a79eb0;
-  --border: #39323f;
-  --success: #4ade80;
-  --error: #f45b69;
-  --money: #ffd166;
+  --font-display: 'Caprasimo', system-ui, -apple-system, sans-serif;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --accent: #c67139;
+  --accent-pressed: #a8592a;
+  --accent-2: #7a8a5e;
+  --bg: #f5ead8;
+  --surface: #ebddc5;
+  --surface-raised: #fff8ee;
+  --text: #201e1d;
+  --text-secondary: rgba(32, 30, 29, 0.6);
+  --border: rgba(32, 30, 29, 0.14);
+  --success: #7a8a5e;
+  --error: #b3452f;
+  --money: #8c491a;
+  --money-bg: #fff2eb;
+  --tag-bg: #f0fae1;
+  --tag-text: #3d472b;
+  --disabled: #e3c8a8;
+  --on-accent: #fff8ee;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -20,18 +64,46 @@
   --space-8: 32px;
   --space-12: 48px;
 
-  color-scheme: dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+  font-family: var(--font-body);
 }
 
-:root[data-theme='light'] {
-  --bg: #fff8f3;
-  --surface: #ffffff;
-  --surface-raised: #fff3ea;
-  --text: #231b1e;
-  --text-secondary: #75686e;
-  --border: #efe3dc;
-  color-scheme: light;
+:root[data-theme='dark'] {
+  --accent: #ff5c2b;
+  --accent-pressed: #e64a1b;
+  --accent-2: #4ade80;
+  --bg: #15121a;
+  --surface: #211c29;
+  --surface-raised: #2b2433;
+  --text: #f5f1ee;
+  --text-secondary: #a79eb0;
+  --border: #39323f;
+  --success: #4ade80;
+  --error: #f45b69;
+  --money: #ffd166;
+  --money-bg: rgba(255, 209, 102, 0.12);
+  --tag-bg: rgba(74, 222, 128, 0.14);
+  --tag-text: #4ade80;
+  --disabled: #3d3648;
+  --on-accent: #15121a;
+  color-scheme: dark;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.5; }
+  50% { opacity: 0.9; }
+  100% { opacity: 0.5; }
 }
 
 * {
@@ -43,6 +115,7 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100svh;
+  font-family: var(--font-body);
 }
 
 #root {
@@ -65,24 +138,27 @@ body {
 
 h1, h2, h3 {
   margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
 }
 
-h1 { font-size: 24px; font-weight: 700; }
-h2 { font-size: 18px; font-weight: 600; }
+h1 { font-size: 26px; font-weight: 400; letter-spacing: -0.01em; }
+h2 { font-size: 20px; font-weight: 400; }
 
 p { margin: 0; }
 
 button {
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   border: none;
-  border-radius: 12px;
-  padding: 12px 20px;
+  border-radius: 999px;
+  min-height: 48px;
+  padding: 12px 22px;
   background: var(--accent);
-  color: #15121a;
+  color: var(--on-accent);
   transition: background 0.15s ease, transform 0.1s ease;
+  box-shadow: 0 6px 18px rgba(198, 113, 57, 0.22);
 }
 
 button:hover {
@@ -94,25 +170,45 @@ button:active {
 }
 
 button:disabled {
-  opacity: 0.4;
+  opacity: 1;
+  background: var(--disabled);
+  color: rgba(32, 30, 29, 0.5);
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 button.secondary {
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+  font-weight: 600;
 }
 
 input, textarea, select {
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 15px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px;
+  border-radius: 999px;
+  min-height: 50px;
+  padding: 0 18px;
   color: var(--text);
   width: 100%;
+}
+
+textarea {
+  border-radius: 20px;
+  padding: 14px 16px;
+  min-height: auto;
+  resize: none;
 }
 
 input:focus, textarea:focus, select:focus {
@@ -126,8 +222,7 @@ a {
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 24px;
   padding: var(--space-4);
 }
 
@@ -136,19 +231,91 @@ a {
   font-size: 13px;
 }
 
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--money);
+  font-weight: 700;
+}
+
+.pill-tabs {
+  display: flex;
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.pill-tabs button {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pill-tabs button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
 .event-card {
   display: block;
   text-decoration: none;
   color: var(--text);
   padding: 0;
   overflow: hidden;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 3px 10px rgba(46, 43, 37, 0.1);
+  transition: transform 0.12s ease;
+}
+
+.event-card:active {
+  transform: scale(0.98);
 }
 
 .event-card__photo {
   width: 100%;
-  height: 160px;
+  height: 150px;
   object-fit: cover;
   display: block;
+  position: relative;
+}
+
+.event-card__photo-placeholder {
+  height: 150px;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+  position: relative;
+}
+
+.event-card__photo-tag {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(32, 30, 29, 0.35);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.event-card__badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
 .event-card__body {
@@ -158,8 +325,36 @@ a {
 .event-card__footer {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-top: var(--space-3);
   font-size: 14px;
+}
+
+.deposit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--money-bg);
+  color: var(--money);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.tag {
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.skeleton {
+  background: var(--border);
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
 }
 
 .screen {

@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, chatSocketUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import type { ChatMessage } from '../api/types';
+import type { ChatMessage, EventItem } from '../api/types';
 
 export function ChatScreen() {
   const { id } = useParams<{ id: string }>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [event, setEvent] = useState<EventItem | null>(null);
   const [text, setText] = useState('');
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -15,6 +16,11 @@ export function ChatScreen() {
 
   useEffect(() => {
     if (!id) return;
+
+    api
+      .getEvent(id)
+      .then((data) => setEvent(data as EventItem))
+      .catch(() => {});
 
     api
       .getMessages(id)
@@ -42,44 +48,116 @@ export function ChatScreen() {
   };
 
   return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Чат</h1>
-        <button className="secondary" onClick={() => navigate(`/events/${id}/confirm`)}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          flex: 'none',
+          padding: '56px 16px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <button
+          className="secondary"
+          onClick={() => navigate(-1)}
+          style={{
+            width: 36,
+            height: 36,
+            minHeight: 0,
+            padding: 0,
+            borderRadius: 999,
+            background: 'var(--surface)',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M15 19l-7-7 7-7" stroke="var(--text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16 }}>{event?.activity_type ?? 'Чат'}</div>
+          <div className="text-secondary" style={{ fontSize: 11 }}>
+            {event ? new Date(event.datetime).toLocaleString('ru-RU') : ''}
+          </div>
+        </div>
+        <button
+          onClick={() => navigate(`/events/${id}/confirm`)}
+          style={{
+            minHeight: 36,
+            padding: '0 14px',
+            background: 'var(--accent-2)',
+            color: 'var(--tag-bg)',
+            fontSize: 12,
+            fontWeight: 700,
+            boxShadow: 'none',
+          }}
+        >
           Подтвердить встречу
         </button>
       </div>
-      {!connected && <p className="text-secondary">Переподключение…</p>}
 
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', margin: 'var(--space-3) 0' }}>
-        {messages.length === 0 && (
-          <p className="text-secondary">Договоритесь о деталях встречи здесь</p>
-        )}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className="card"
-            style={{
-              alignSelf: m.sender_id === user?.id ? 'flex-end' : 'flex-start',
-              background: m.sender_id === user?.id ? 'var(--accent)' : 'var(--surface)',
-              color: m.sender_id === user?.id ? '#15121a' : 'var(--text)',
-              maxWidth: '80%',
-            }}
-          >
-            {m.text}
-          </div>
-        ))}
+      {!connected && (
+        <p className="text-secondary" style={{ textAlign: 'center', padding: '4px 0' }}>
+          Переподключение…
+        </p>
+      )}
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {messages.length === 0 && <p className="text-secondary">Договоритесь о деталях встречи здесь</p>}
+        {messages.map((m) => {
+          const mine = m.sender_id === user?.id;
+          return (
+            <div
+              key={m.id}
+              style={{
+                alignSelf: mine ? 'flex-end' : 'flex-start',
+                maxWidth: '78%',
+                padding: '11px 16px',
+                borderRadius: 20,
+                fontSize: 14,
+                lineHeight: 1.4,
+                background: mine ? 'var(--accent)' : 'var(--surface)',
+                color: mine ? 'var(--on-accent)' : 'var(--text)',
+              }}
+            >
+              {m.text}
+            </div>
+          );
+        })}
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+      <div style={{ flex: 'none', display: 'flex', gap: 8, padding: '10px 16px 34px', alignItems: 'center' }}>
         <input
           type="text"
           placeholder="Сообщение…"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
+          style={{ flex: 1 }}
         />
-        <button onClick={send}>➤</button>
+        <button
+          onClick={send}
+          style={{
+            width: 44,
+            height: 44,
+            minHeight: 0,
+            flex: 'none',
+            borderRadius: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M3 20l18-8L3 4l0 7 12 1-12 1z" fill="var(--on-accent)" />
+          </svg>
+        </button>
       </div>
     </div>
   );
