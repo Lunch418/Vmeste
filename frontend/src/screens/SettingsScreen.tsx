@@ -8,12 +8,18 @@ export function SettingsScreen() {
   const { user, refreshUser } = useAuth();
   const [name, setName] = useState(user?.name ?? '');
   const [age, setAge] = useState(user?.age ?? '');
+  const [gender, setGender] = useState(user?.gender ?? '');
   const [city, setCity] = useState(user?.city ?? '');
   const [saved, setSaved] = useState(false);
   const [subscribed, setSubscribed] = useState<string[]>([]);
 
   const save = async () => {
-    await api.updateMe({ name, age: age ? Number(age) : undefined, city });
+    await api.updateMe({
+      name,
+      age: age ? Number(age) : undefined,
+      gender: gender || undefined,
+      city,
+    });
     await refreshUser();
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -46,6 +52,15 @@ export function SettingsScreen() {
         onChange={(e) => setAge(e.target.value === '' ? '' : Number(e.target.value))}
         style={{ marginBottom: 'var(--space-3)' }}
       />
+      <select
+        value={gender}
+        onChange={(e) => setGender(e.target.value)}
+        style={{ marginBottom: 'var(--space-3)' }}
+      >
+        <option value="">Пол не указан</option>
+        <option value="female">Женский</option>
+        <option value="male">Мужской</option>
+      </select>
       <input
         type="text"
         placeholder="Город"

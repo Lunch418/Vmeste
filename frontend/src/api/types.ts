@@ -7,6 +7,7 @@ export interface User {
   id: string;
   name: string | null;
   age: number | null;
+  gender: 'male' | 'female' | null;
   city: string | null;
   avatar_url: string | null;
   rating_avg: number;
