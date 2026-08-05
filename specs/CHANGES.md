@@ -1,0 +1,48 @@
+# CHANGES.md — «Вместе» MVP
+
+Реализация по `specs/SPEC.md` и `specs/COMPONENTS.md`/`NAVIGATION.md`.
+Написано напрямую (без вложенных агентов run_team.sh — см. историю чата: nested `claude -p`
+не мог получить разрешение на запись файлов в неинтерактивном режиме и не реализовал ничего).
+
+## Backend (`backend/`, FastAPI + SQLAlchemy)
+
+Полностью рабочие эндпоинты (см. `specs/SPEC.md` раздел 5):
+
+- **Auth**: `POST /auth/phone`, `POST /auth/verify` — выдача JWT
+- **Users**: `GET/PATCH /users/me`, `GET /users/{id}`, `POST /users/{id}/report`, `POST /users/{id}/block`
+- **Events**: полный CRUD + `join`/`leave`, фильтры (тип, дата, депозит, город)
+- **Deposits**: создание, `webhook`, `refund`, эскроу-состояния (`held/released_to_payer/released_to_poster/refunded`)
+- **Chat**: REST-история сообщений + `WS /ws/events/{id}/chat` (реалтайм, только для участников события)
+- **Meeting confirmation**: `confirm/selfie` (метаданные — количество лиц), `confirm/qr/generate|scan`, `rate`
+- **Notifications**: `subscribe`, список уведомлений
+- Автоархивирование события через 2 часа после `datetime` (фоновая задача, проверка каждые 5 минут)
+- 12 pytest-тестов покрывают auth, события, депозиты, подтверждение встречи, рейтинг, автоархив — все проходят (`.venv/bin/python -m pytest`)
+- `docker-compose.yml`: backend + Postgres + Redis
+
+### Осознанно заглушено (нет реальных внешних учётных данных)
+
+- **SMS-провайдер** (`app/sms.py`): код подтверждения пишется в лог сервера вместо реальной отправки. Подключить SMS.ru/SMSC/Twilio при наличии ключей.
+- **ЮKassa Split / эскроу** (`app/payments.py`): `create_payment`/`refund_payment` возвращают фиктивный `payment_id` и `True` вместо реального вызова API ЮKassa. Webhook-эндпоинт есть, но не проверяет подпись реального провайдера. Нужен merchant-аккаунт (shop_id/secret_key).
+- Alembic-миграции не подключены — используется `Base.metadata.create_all` при старте (для MVP; на проде — добавить Alembic до первого деплоя на Postgres).
+
+## Frontend (`frontend/`, Vite + React + TypeScript, PWA)
+
+Экраны по `specs/NAVIGATION.md`: AuthFlow, FeedScreen, EventDetailScreen, CreateEventWizard (5 шагов),
+ChatScreen (WebSocket), ConfirmMeetingScreen, RatingScreen, ProfileScreen, SettingsScreen, TabBar
+(мобильная нижняя навигация / боковая на десктопе).
+
+- Тёмная тема — основная (палитра из `specs/COMPONENTS.md`, светлая — через `data-theme="light"`, переключатель темы в UI пока не добавлен)
+- PWA: манифест, service worker (`vite-plugin-pwa`, `registerType: autoUpdate`); иконки-плейсхолдеры (`public/icon-192.png`, `icon-512.png` — залить реальный арт перед релизом)
+- `npm run build` и `npm run lint` (oxlint) проходят чисто
+- Dev-сервер проверен: страница и `main.tsx` отдаются корректно (200)
+
+### Осознанно упрощено
+
+- **AR-селфи** (`ConfirmMeetingScreen`): реальный доступ к камере через `getUserMedia` работает, но распознавание двух лиц (MediaPipe Face Mesh) не подключено — количество "лиц в кадре" переключается вручную слайдером для демонстрации потока подтверждения и расчёта депозита. Подключить MediaPipe — отдельная задача (модель + тюнинг на устройстве).
+- **QR-подтверждение**: работает через реальный backend-эндпоинт, но без камеры — QR-токен вводится текстом, а не сканируется камерой. Добавить `jsQR`/`qr-scanner` для реального сканирования.
+- **Live-геолокация за 30 минут до встречи** — вне MVP по `specs/SPEC.md` (Этап 2), не реализовано.
+
+## Не входит в это изменение (см. `specs/SPEC.md` раздел 2 — вне MVP)
+
+Live-геолокация, карта города, верификация лица при регистрации, SOS, премиум/монетизация,
+нативные приложения, второй город.
