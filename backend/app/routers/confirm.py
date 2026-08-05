@@ -1,14 +1,16 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import (
     Deposit,
     EscrowStatus,
     Event,
+    EventStatus,
     Participation,
     ParticipationStatus,
     Rating,
@@ -23,15 +25,19 @@ router = APIRouter(prefix="/events", tags=["confirm"])
 _qr_tokens: dict[str, str] = {}
 
 
-def _get_participation_pair(db: Session, event_id: str, user_id: str) -> tuple[Event, Participation]:
+def _get_own_participation(db: Session, event_id: str, user_id: str) -> tuple[Event, Participation]:
+    """Подтверждение встречи доступно только участнику для его собственного участия —
+    ни постер, ни другой участник не могут подтвердить/списать чужой депозит."""
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Событие не найдено")
+    if event.status != EventStatus.active:
+        raise HTTPException(status_code=400, detail="Событие неактивно")
     if datetime.utcnow() < event.datetime_:
         raise HTTPException(status_code=400, detail="Подтверждение доступно только во время встречи")
-
-    if user_id == event.poster_id:
-        return event, None
+    deadline = event.datetime_ + timedelta(minutes=settings.meeting_confirm_window_minutes)
+    if datetime.utcnow() > deadline:
+        raise HTTPException(status_code=400, detail="Окно подтверждения истекло")
 
     participation = (
         db.query(Participation)
@@ -40,24 +46,18 @@ def _get_participation_pair(db: Session, event_id: str, user_id: str) -> tuple[E
     )
     if not participation:
         raise HTTPException(status_code=403, detail="Вы не участник этого события")
+    if participation.status != ParticipationStatus.joined:
+        raise HTTPException(status_code=400, detail="Участие уже обработано")
     return event, participation
 
 
-def _settle_deposits(db: Session, event: Event, confirmed: bool):
-    participations = (
-        db.query(Participation).filter(Participation.event_id == event.id).all()
-    )
-    for p in participations:
-        if p.status == ParticipationStatus.cancelled:
-            continue
-        p.status = ParticipationStatus.confirmed if confirmed else ParticipationStatus.no_show
-        deposit = p.deposit
-        if not deposit or deposit.escrow_status != EscrowStatus.held:
-            continue
-        if confirmed:
-            deposit.escrow_status = EscrowStatus.released_to_payer
-        else:
-            deposit.escrow_status = EscrowStatus.released_to_poster
+def _settle_participation(db: Session, participation: Participation, confirmed: bool):
+    participation.status = ParticipationStatus.confirmed if confirmed else ParticipationStatus.no_show
+    deposit = participation.deposit
+    if deposit and deposit.escrow_status == EscrowStatus.held:
+        deposit.escrow_status = (
+            EscrowStatus.released_to_payer if confirmed else EscrowStatus.released_to_poster
+        )
     db.commit()
 
 
@@ -68,10 +68,10 @@ def confirm_selfie(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event, _ = _get_participation_pair(db, event_id, current_user.id)
+    _, participation = _get_own_participation(db, event_id, current_user.id)
     if payload.faces_detected < 2:
         raise HTTPException(status_code=400, detail="Для подтверждения нужно 2 лица в кадре")
-    _settle_deposits(db, event, confirmed=True)
+    _settle_participation(db, participation, confirmed=True)
     return {"status": "confirmed"}
 
 
@@ -98,12 +98,12 @@ def scan_qr(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    event, _ = _get_participation_pair(db, event_id, current_user.id)
+    _, participation = _get_own_participation(db, event_id, current_user.id)
     expected = _qr_tokens.get(event_id)
     if not expected or expected != payload.qr_token:
         raise HTTPException(status_code=400, detail="Неверный или истёкший QR-код")
     del _qr_tokens[event_id]
-    _settle_deposits(db, event, confirmed=True)
+    _settle_participation(db, participation, confirmed=True)
     return {"status": "confirmed"}
 
 

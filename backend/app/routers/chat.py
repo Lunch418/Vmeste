@@ -76,6 +76,11 @@ async def chat_ws(websocket: WebSocket, event_id: str, token: str = Query(...)):
     try:
         from app.models import Event
 
+        auth_user = db.query(User).filter(User.id == user_id).first()
+        if not auth_user or auth_user.is_banned:
+            await websocket.close(code=4401)
+            return
+
         event = db.query(Event).filter(Event.id == event_id).first()
         if not event:
             await websocket.close(code=4404)

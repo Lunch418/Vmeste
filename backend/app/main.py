@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.archive import auto_archive_loop
 from app.database import Base, engine
 from app.routers import auth, chat, confirm, deposits, events, notifications, users
+
+logging.getLogger("sms").setLevel(logging.INFO)
+logging.getLogger("sms").addHandler(logging.StreamHandler())
 
 
 @asynccontextmanager
