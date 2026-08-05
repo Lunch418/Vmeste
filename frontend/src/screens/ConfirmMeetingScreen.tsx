@@ -30,6 +30,7 @@ export function ConfirmMeetingScreen() {
   const [confirmed, setConfirmed] = useState(false);
   const [confirmAnim, setConfirmAnim] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [noShowReason, setNoShowReason] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [scanInput, setScanInput] = useState('');
@@ -68,6 +69,8 @@ export function ConfirmMeetingScreen() {
               if (participation.status === 'confirmed') {
                 setConfirmed(true);
                 setConfirmAnim(true);
+              } else if (participation.status === 'no_show') {
+                setNoShowReason(participation.no_show_reason);
               } else if (participation.joiner_arrived_at) {
                 setWaiting(true);
               }
@@ -214,6 +217,24 @@ export function ConfirmMeetingScreen() {
           </p>
           <button onClick={() => navigate(`/events/${id}/rate`)} style={{ minWidth: 220 }}>
             Оценить встречу
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (noShowReason) {
+    return (
+      <div className="screen" style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          <h1 style={{ marginBottom: 8 }}>Встреча не состоялась</h1>
+          <p className="text-secondary" style={{ marginBottom: 28, maxWidth: 280 }}>
+            {noShowReason === 'poster_absent'
+              ? 'Организатор не подтвердил присутствие вовремя — ваш депозит возвращён, компенсация зачислена'
+              : 'Вы не подтвердили присутствие вовремя — депозит ушёл организатору'}
+          </p>
+          <button onClick={() => navigate('/')} style={{ minWidth: 220 }}>
+            К ленте
           </button>
         </div>
       </div>

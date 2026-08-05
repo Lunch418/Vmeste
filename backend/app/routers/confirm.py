@@ -9,7 +9,6 @@ from app.config import settings
 from app.database import get_db
 from app.geo import distance_meters
 from app.models import (
-    Deposit,
     EscrowStatus,
     Event,
     EventStatus,
