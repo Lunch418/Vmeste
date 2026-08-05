@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { getCurrentCoords } from '../geolocation';
+import { parseUtcMs } from '../dates';
 import type { EventItem, Participation } from '../api/types';
 
 const GRACE_MINUTES = 15;
@@ -186,7 +187,7 @@ export function ConfirmMeetingScreen() {
 
   const facesReady = facesDetected >= 2;
 
-  const graceElapsedMs = (arrivedAtIso: string) => now - new Date(arrivedAtIso).getTime() - GRACE_MINUTES * 60_000;
+  const graceElapsedMs = (arrivedAtIso: string) => now - parseUtcMs(arrivedAtIso) - GRACE_MINUTES * 60_000;
 
   if (confirmed) {
     return (

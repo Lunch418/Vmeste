@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { WizardStepper } from '../components/WizardStepper';
 import { ACTIVITY_TYPES } from '../activity';
 import { DepositSheet, type SheetPhase } from '../components/DepositSheet';
+import { getCurrentCoords } from '../geolocation';
 import type { EventDraft, GenderFilter } from '../api/types';
 
 const TOTAL_STEPS = 5;
@@ -65,9 +66,23 @@ export function CreateEventWizard() {
   const dragStartX = useRef(0);
   const [createdEventId, setCreatedEventId] = useState<string | null>(null);
   const [depositPhase, setDepositPhase] = useState<SheetPhase>('none');
+  const [locating, setLocating] = useState(false);
   const navigate = useNavigate();
 
   const update = (patch: Partial<EventDraft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  const markLocation = async () => {
+    setLocating(true);
+    setError(null);
+    try {
+      const coords = await getCurrentCoords();
+      update({ location_lat: coords.lat, location_lng: coords.lng });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLocating(false);
+    }
+  };
 
   const next = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
@@ -233,7 +248,23 @@ export function CreateEventWizard() {
               placeholder="Адрес встречи"
               value={draft.location_address ?? ''}
               onChange={(e) => update({ location_address: e.target.value })}
+              style={{ marginBottom: 12 }}
             />
+            <button
+              className={draft.location_lat ? '' : 'secondary'}
+              onClick={markLocation}
+              disabled={locating}
+              style={{ width: '100%', fontSize: 14 }}
+            >
+              {locating
+                ? 'Определяем местоположение…'
+                : draft.location_lat
+                  ? 'Точка встречи отмечена ✓'
+                  : 'Отметить точку встречи на карте'}
+            </button>
+            <p className="text-secondary" style={{ marginTop: 8 }}>
+              Нужна для взаимного подтверждения явки — без точки участники не смогут отметиться на встрече
+            </p>
           </div>
 
           <div style={{ width: '100%', flex: 'none', padding: '12px 20px' }}>

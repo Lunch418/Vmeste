@@ -85,6 +85,8 @@ export interface EventDraft {
   activity_type: string;
   datetime: string;
   location_address?: string;
+  location_lat?: number;
+  location_lng?: number;
   age_min: number;
   age_max: number;
   gender_filter: GenderFilter;
