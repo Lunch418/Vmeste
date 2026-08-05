@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { WizardStepper } from '../components/WizardStepper';
 import { ACTIVITY_TYPES } from '../activity';
+import { DepositSheet, type SheetPhase } from '../components/DepositSheet';
+import { getCurrentCoords } from '../geolocation';
 import type { EventDraft, GenderFilter } from '../api/types';
 
 const TOTAL_STEPS = 5;
@@ -62,9 +64,25 @@ export function CreateEventWizard() {
   const [dragging, setDragging] = useState(false);
   const [dragX, setDragX] = useState(0);
   const dragStartX = useRef(0);
+  const [createdEventId, setCreatedEventId] = useState<string | null>(null);
+  const [depositPhase, setDepositPhase] = useState<SheetPhase>('none');
+  const [locating, setLocating] = useState(false);
   const navigate = useNavigate();
 
   const update = (patch: Partial<EventDraft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  const markLocation = async () => {
+    setLocating(true);
+    setError(null);
+    try {
+      const coords = await getCurrentCoords();
+      update({ location_lat: coords.lat, location_lng: coords.lng });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLocating(false);
+    }
+  };
 
   const next = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
@@ -77,11 +95,26 @@ export function CreateEventWizard() {
         ...draft,
         datetime: new Date(draft.datetime).toISOString(),
       })) as { id: string };
-      navigate(`/events/${event.id}`);
+      setCreatedEventId(event.id);
+      setDepositPhase('idle');
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const payPosterDeposit = async () => {
+    if (!createdEventId) return;
+    setDepositPhase('processing');
+    setError(null);
+    try {
+      await api.createPosterDeposit(createdEventId);
+      setDepositPhase('success');
+      setTimeout(() => navigate(`/events/${createdEventId}`), 900);
+    } catch (e) {
+      setError((e as Error).message);
+      setDepositPhase('idle');
     }
   };
 
@@ -111,7 +144,7 @@ export function CreateEventWizard() {
   const canSubmit = step === TOTAL_STEPS;
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <div style={{ flex: 'none', padding: '56px 20px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <button
@@ -215,7 +248,23 @@ export function CreateEventWizard() {
               placeholder="Адрес встречи"
               value={draft.location_address ?? ''}
               onChange={(e) => update({ location_address: e.target.value })}
+              style={{ marginBottom: 12 }}
             />
+            <button
+              className={draft.location_lat ? '' : 'secondary'}
+              onClick={markLocation}
+              disabled={locating}
+              style={{ width: '100%', fontSize: 14 }}
+            >
+              {locating
+                ? 'Определяем местоположение…'
+                : draft.location_lat
+                  ? 'Точка встречи отмечена ✓'
+                  : 'Отметить точку встречи на карте'}
+            </button>
+            <p className="text-secondary" style={{ marginTop: 8 }}>
+              Нужна для взаимного подтверждения явки — без точки участники не смогут отметиться на встрече
+            </p>
           </div>
 
           <div style={{ width: '100%', flex: 'none', padding: '12px 20px' }}>
@@ -327,6 +376,16 @@ export function CreateEventWizard() {
           {submitting ? 'Публикуем…' : canSubmit ? 'Опубликовать' : 'Далее'}
         </button>
       </div>
+
+      <DepositSheet
+        phase={depositPhase}
+        amount={draft.deposit_amount}
+        title="Ваш депозит-гарантия"
+        description="Как организатор, ты тоже вносишь депозит — если не придёшь на встречу, он достанется пришедшему участнику как компенсация."
+        successSubtitle="Событие опубликовано"
+        onPay={payPosterDeposit}
+        onClose={() => createdEventId && navigate(`/events/${createdEventId}`)}
+      />
     </div>
   );
 }

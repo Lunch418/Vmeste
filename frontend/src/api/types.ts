@@ -1,7 +1,12 @@
 export type GenderFilter = 'any' | 'male' | 'female';
 export type EventStatus = 'active' | 'archived' | 'cancelled';
 export type ParticipationStatus = 'joined' | 'confirmed' | 'no_show' | 'cancelled';
-export type EscrowStatus = 'held' | 'released_to_payer' | 'released_to_poster' | 'refunded';
+export type EscrowStatus = 'held' | 'released_to_payer' | 'released_to_poster' | 'refunded' | 'forfeited';
+
+export interface GeolocationCoords {
+  lat: number;
+  lng: number;
+}
 
 export interface User {
   id: string;
@@ -34,6 +39,8 @@ export interface EventItem {
   deposit_amount: number;
   status: EventStatus;
   city: string;
+  poster_arrived_at: string | null;
+  poster_deposit_id: string | null;
 }
 
 export interface Participation {
@@ -42,6 +49,18 @@ export interface Participation {
   user_id: string;
   status: ParticipationStatus;
   deposit_id: string | null;
+  joiner_arrived_at: string | null;
+  no_show_reason: 'poster_absent' | 'joiner_absent' | null;
+}
+
+export interface Rating {
+  id: string;
+  event_id: string;
+  rater_id: string;
+  rater_name: string | null;
+  stars: number;
+  comment: string | null;
+  created_at: string;
 }
 
 export interface Deposit {
@@ -66,6 +85,8 @@ export interface EventDraft {
   activity_type: string;
   datetime: string;
   location_address?: string;
+  location_lat?: number;
+  location_lng?: number;
   age_min: number;
   age_max: number;
   gender_filter: GenderFilter;

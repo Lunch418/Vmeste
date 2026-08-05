@@ -1,13 +1,16 @@
 from datetime import date, datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app import payments
 from app.config import settings
 from app.database import get_db
 from app.models import (
     Block,
+    Deposit,
+    EscrowStatus,
     Event,
     EventStatus,
     GenderFilter,
@@ -15,7 +18,7 @@ from app.models import (
     ParticipationStatus,
     User,
 )
-from app.schemas import EventCreate, EventOut, EventUpdate, ParticipationOut
+from app.schemas import DepositOut, EventCreate, EventOut, EventUpdate, ParticipationOut
 from app.security import get_current_user
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -109,8 +112,58 @@ def cancel_event(
     if event.poster_id != current_user.id:
         raise HTTPException(status_code=403, detail="Отменить может только автор")
     event.status = EventStatus.cancelled
+
+    # Возврат ещё не расчитанных депозитов — иначе они зависают в held
+    # навсегда (после отмены событие больше не проходит через confirm/
+    # archive пути расчёта).
+    held_participations = (
+        db.query(Participation)
+        .filter(Participation.event_id == event_id, Participation.status == ParticipationStatus.joined)
+        .all()
+    )
+    for p in held_participations:
+        if p.deposit and p.deposit.escrow_status == EscrowStatus.held:
+            p.deposit.escrow_status = EscrowStatus.refunded
+    if event.poster_deposit and event.poster_deposit.escrow_status == EscrowStatus.held:
+        event.poster_deposit.escrow_status = EscrowStatus.refunded
+
     db.commit()
     return None
+
+
+@router.post("/{event_id}/poster-deposit", response_model=DepositOut, status_code=201)
+def create_poster_deposit(
+    event_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Депозит-гарантия постера — симметричный джойнерскому, нужен, чтобы
+    было из чего компенсировать пришедшего участника, если постер не явится."""
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    if event.poster_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Депозит вносит только автор события")
+    if event.status != EventStatus.active:
+        raise HTTPException(status_code=400, detail="Событие неактивно")
+    if event.poster_deposit_id:
+        raise HTTPException(status_code=400, detail="Депозит постера уже создан")
+
+    yk_payment_id = payments.create_payment(
+        event.deposit_amount, f"Депозит-гарантия организатора «{event.activity_type}»"
+    )
+    deposit = Deposit(
+        payer_id=current_user.id,
+        amount=event.deposit_amount,
+        yukassa_payment_id=yk_payment_id,
+        escrow_status=EscrowStatus.held,
+    )
+    db.add(deposit)
+    db.flush()
+    event.poster_deposit_id = deposit.id
+    db.commit()
+    db.refresh(deposit)
+    return deposit
 
 
 @router.post("/{event_id}/join", response_model=ParticipationOut, status_code=201)
@@ -170,6 +223,40 @@ def join_event(
     return participation
 
 
+@router.get("/{event_id}/participations/me", response_model=ParticipationOut)
+def get_my_participation(
+    event_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    participation = (
+        db.query(Participation)
+        .filter(Participation.event_id == event_id, Participation.user_id == current_user.id)
+        .first()
+    )
+    if not participation:
+        raise HTTPException(status_code=404, detail="Участие не найдено")
+    return participation
+
+
+@router.get("/{event_id}/participations", response_model=List[ParticipationOut])
+def list_participations(
+    event_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    if event.poster_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Список участников доступен только автору события")
+    return (
+        db.query(Participation)
+        .filter(Participation.event_id == event_id, Participation.status != ParticipationStatus.cancelled)
+        .all()
+    )
+
+
 @router.post("/{event_id}/leave", status_code=204)
 def leave_event(
     event_id: str,
@@ -183,8 +270,8 @@ def leave_event(
     )
     if not participation:
         raise HTTPException(status_code=404, detail="Участие не найдено")
-    if participation.status == ParticipationStatus.cancelled:
-        raise HTTPException(status_code=400, detail="Участие уже отменено")
+    if participation.status != ParticipationStatus.joined:
+        raise HTTPException(status_code=400, detail="Участие уже обработано, отменить нельзя")
     event = db.query(Event).filter(Event.id == event_id).first()
     participation.status = ParticipationStatus.cancelled
     if event and event.slots_taken > 0:

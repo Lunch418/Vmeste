@@ -10,6 +10,7 @@ import { ChatScreen } from './screens/ChatScreen';
 import { ConfirmMeetingScreen } from './screens/ConfirmMeetingScreen';
 import { RatingScreen } from './screens/RatingScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { PublicProfileScreen } from './screens/PublicProfileScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -79,6 +80,14 @@ export default function App() {
           element={
             <RequireAuth>
               <ProfileScreen />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/users/:id"
+          element={
+            <RequireAuth>
+              <PublicProfileScreen />
             </RequireAuth>
           }
         />

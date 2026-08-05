@@ -13,14 +13,21 @@ from app.main import app
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
+def db_sessionmaker(tmp_path):
+    """Session factory bound to the same per-test sqlite DB the `client`
+    fixture uses. Lets tests reach into the DB directly (e.g. to backdate
+    timestamps for grace-period tests) without a second, disconnected DB."""
     db_path = tmp_path / "test.db"
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    return TestingSessionLocal
 
+
+@pytest.fixture()
+def client(db_sessionmaker, monkeypatch):
     def override_get_db():
-        db = TestingSessionLocal()
+        db = db_sessionmaker()
         try:
             yield db
         finally:
@@ -30,7 +37,7 @@ def client(tmp_path, monkeypatch):
 
     import app.archive as archive_module
 
-    monkeypatch.setattr(archive_module, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(archive_module, "SessionLocal", db_sessionmaker)
 
     with TestClient(app) as c:
         yield c

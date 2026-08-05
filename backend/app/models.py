@@ -40,6 +40,7 @@ class EscrowStatus(str, enum.Enum):
     released_to_payer = "released_to_payer"
     released_to_poster = "released_to_poster"
     refunded = "refunded"
+    forfeited = "forfeited"  # депозит абсентера форфейтится в пользу пришедшей стороны
 
 
 class GenderFilter(str, enum.Enum):
@@ -89,10 +90,13 @@ class Event(Base):
     status = Column(Enum(EventStatus), default=EventStatus.active)
     city = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    poster_arrived_at = Column(DateTime, nullable=True)
+    poster_deposit_id = Column(String, ForeignKey("deposits.id"), nullable=True)
 
     poster = relationship("User", back_populates="events")
     participations = relationship("Participation", back_populates="event")
     messages = relationship("Message", back_populates="event")
+    poster_deposit = relationship("Deposit", foreign_keys=[poster_deposit_id])
 
     @property
     def auto_archive_at(self) -> datetime:
@@ -108,6 +112,8 @@ class Participation(Base):
     status = Column(Enum(ParticipationStatus), default=ParticipationStatus.joined)
     deposit_id = Column(String, ForeignKey("deposits.id"), nullable=True)
     joined_at = Column(DateTime, default=datetime.utcnow)
+    joiner_arrived_at = Column(DateTime, nullable=True)
+    no_show_reason = Column(String, nullable=True)  # 'poster_absent' | 'joiner_absent'
 
     event = relationship("Event", back_populates="participations")
     deposit = relationship(

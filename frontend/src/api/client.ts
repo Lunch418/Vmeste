@@ -1,3 +1,5 @@
+import type { GeolocationCoords } from './types';
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
 let authToken: string | null = localStorage.getItem('vmeste_token');
@@ -75,6 +77,8 @@ export const api = {
   getEvent: (id: string) => request(`/events/${id}`),
   joinEvent: (id: string) => request(`/events/${id}/join`, { method: 'POST' }),
   leaveEvent: (id: string) => request<void>(`/events/${id}/leave`, { method: 'POST' }),
+  listParticipations: (id: string) => request(`/events/${id}/participations`),
+  getMyParticipation: (id: string) => request(`/events/${id}/participations/me`),
 
   createDeposit: (participationId: string) =>
     request('/deposits', {
@@ -82,23 +86,39 @@ export const api = {
       body: JSON.stringify({ participation_id: participationId }),
     }),
   getDeposit: (id: string) => request(`/deposits/${id}`),
+  createPosterDeposit: (eventId: string) =>
+    request(`/events/${eventId}/poster-deposit`, { method: 'POST' }),
 
   getMessages: (eventId: string) => request(`/events/${eventId}/messages`),
   sendMessage: (eventId: string, text: string) =>
     request(`/events/${eventId}/messages`, { method: 'POST', body: JSON.stringify({ text }) }),
 
-  confirmSelfie: (eventId: string, facesDetected: number, filterName?: string) =>
-    request(`/events/${eventId}/confirm/selfie`, {
+  confirmSelfie: (eventId: string, facesDetected: number, coords: GeolocationCoords, filterName?: string) =>
+    request<{ status: string }>(`/events/${eventId}/confirm/selfie`, {
       method: 'POST',
-      body: JSON.stringify({ faces_detected: facesDetected, filter_name: filterName }),
+      body: JSON.stringify({
+        faces_detected: facesDetected,
+        filter_name: filterName,
+        lat: coords.lat,
+        lng: coords.lng,
+      }),
     }),
-  generateQr: (eventId: string) =>
-    request<{ qr_token: string }>(`/events/${eventId}/confirm/qr/generate`, { method: 'POST' }),
-  scanQr: (eventId: string, token: string) =>
-    request(`/events/${eventId}/confirm/qr/scan`, {
+  generateQr: (eventId: string, coords: GeolocationCoords) =>
+    request<{ qr_token: string }>(`/events/${eventId}/confirm/qr/generate`, {
       method: 'POST',
-      body: JSON.stringify({ qr_token: token }),
+      body: JSON.stringify({ lat: coords.lat, lng: coords.lng }),
     }),
+  scanQr: (eventId: string, token: string, coords: GeolocationCoords) =>
+    request<{ status: string }>(`/events/${eventId}/confirm/qr/scan`, {
+      method: 'POST',
+      body: JSON.stringify({ qr_token: token, lat: coords.lat, lng: coords.lng }),
+    }),
+  resolveNoShow: (eventId: string, participationId: string) =>
+    request<{ status: string; reason: string }>(`/events/${eventId}/resolve-no-show`, {
+      method: 'POST',
+      body: JSON.stringify({ participation_id: participationId }),
+    }),
+  getUserRatings: (userId: string) => request(`/users/${userId}/ratings`),
   subscribe: (category: string) =>
     request<void>('/notifications/subscribe', {
       method: 'POST',
