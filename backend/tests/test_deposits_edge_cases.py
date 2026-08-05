@@ -90,6 +90,32 @@ def test_webhook_for_nonexistent_deposit_returns_404(client):
     assert resp.status_code == 404
 
 
+def test_webhook_cannot_revert_a_settled_deposit_back_to_held(client):
+    """Security fix: the webhook has no auth (real payment webhooks are
+    called by the provider, not a logged-in user) but must not be usable
+    to undo an already-finalized escrow outcome (e.g. refunded) back to
+    held, which would let the payer call /refund a second time."""
+    poster = register_user(client, "+79990000320")
+    joiner = register_user(client, "+79990000321")
+    _, participation = _join(client, poster, joiner)
+    deposit = client.post(
+        "/deposits", json={"participation_id": participation["id"]}, headers=joiner
+    ).json()
+
+    refund_resp = client.post(f"/deposits/{deposit['id']}/refund", headers=joiner)
+    assert refund_resp.status_code == 200
+    assert refund_resp.json()["escrow_status"] == "refunded"
+
+    webhook_resp = client.post(f"/deposits/{deposit['id']}/webhook")
+    assert webhook_resp.status_code == 204
+
+    after = client.get(f"/deposits/{deposit['id']}", headers=joiner).json()
+    assert after["escrow_status"] == "refunded"
+
+    second_refund = client.post(f"/deposits/{deposit['id']}/refund", headers=joiner)
+    assert second_refund.status_code == 400
+
+
 def test_get_deposit_by_unrelated_user_forbidden(client):
     poster = register_user(client, "+79990000311")
     joiner = register_user(client, "+79990000312")

@@ -6,15 +6,26 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.archive import auto_archive_loop
+from app.config import settings
 from app.database import Base, engine
 from app.routers import auth, chat, confirm, deposits, events, notifications, users
 
 logging.getLogger("sms").setLevel(logging.INFO)
 logging.getLogger("sms").addHandler(logging.StreamHandler())
 
+logger = logging.getLogger("app.startup")
+
+_DEFAULT_JWT_SECRET = "dev-secret-change-in-production"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.jwt_secret == _DEFAULT_JWT_SECRET:
+        logger.warning(
+            "JWT_SECRET не задан — используется небезопасное значение по умолчанию. "
+            "Это допустимо только для локальной разработки: с этим секретом любой может "
+            "подделать токен для любого user_id. Задайте JWT_SECRET перед деплоем."
+        )
     Base.metadata.create_all(bind=engine)
     task = asyncio.create_task(auto_archive_loop())
     yield
@@ -25,7 +36,7 @@ app = FastAPI(title="Вместе API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

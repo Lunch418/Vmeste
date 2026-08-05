@@ -53,10 +53,22 @@ def create_deposit(
 
 @router.post("/{deposit_id}/webhook", status_code=204)
 def yukassa_webhook(deposit_id: str, db: Session = Depends(get_db)):
-    """Коллбек от ЮKassa о подтверждении платежа (эмулируется как no-op на MVP-заглушке)."""
+    """Коллбек от ЮKassa о подтверждении платежа.
+
+    ЗАГЛУШКА: нет проверки подписи провайдера (нет merchant-аккаунта — см.
+    specs/CHANGES.md). Эндпоинт остаётся без аутентификации, т.к. реальные
+    платёжные вебхуки вызываются самим провайдером, а не пользователем —
+    но именно поэтому он НЕ должен уметь откатывать уже расчитанный эскроу
+    обратно в held: без этой защиты кто угодно, зная deposit_id, мог
+    вернуть settled-депозит в held и запросить повторный refund/расчёт.
+    """
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         raise HTTPException(status_code=404, detail="Депозит не найден")
+    if deposit.escrow_status != EscrowStatus.held:
+        # Депозит уже расчитан (refunded/released/forfeited) — подтверждение
+        # оплаты для уже закрытого эскроу ничего не меняет.
+        return None
     deposit.escrow_status = EscrowStatus.held
     db.commit()
     return None

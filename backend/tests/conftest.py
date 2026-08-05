@@ -39,6 +39,15 @@ def client(db_sessionmaker, monkeypatch):
 
     monkeypatch.setattr(archive_module, "SessionLocal", db_sessionmaker)
 
+    # app.sms keeps its rate-limit/code state at module level (not per-test
+    # DB) — reset it so one test's phone-number activity can never leak
+    # into another's, even though current tests all use distinct numbers.
+    import app.sms as sms_module
+
+    monkeypatch.setattr(sms_module, "_codes", {})
+    monkeypatch.setattr(sms_module, "_request_history", {})
+    monkeypatch.setattr(sms_module, "_last_sent", {})
+
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

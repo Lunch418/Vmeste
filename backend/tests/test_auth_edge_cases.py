@@ -42,11 +42,51 @@ def test_expired_code_rejected(client, monkeypatch):
 
     phone = "+79990000102"
     client.post("/auth/phone", json={"phone": phone})
-    code, _ = sms._codes[phone]
+    code, _, attempts = sms._codes[phone]
     # simulate TTL passing
-    sms._codes[phone] = (code, datetime.utcnow() - timedelta(seconds=1))
+    sms._codes[phone] = (code, datetime.utcnow() - timedelta(seconds=1), attempts)
 
     resp = client.post("/auth/verify", json={"phone": phone, "code": code})
+    assert resp.status_code == 400
+
+
+def test_phone_resend_cooldown_rejected(client):
+    phone = "+79990000105"
+    first = client.post("/auth/phone", json={"phone": phone})
+    assert first.status_code == 204
+
+    second = client.post("/auth/phone", json={"phone": phone})
+    assert second.status_code == 429
+
+
+def test_phone_hourly_cap_rejected(client, monkeypatch):
+    from app import sms
+
+    monkeypatch.setattr(sms, "RESEND_COOLDOWN_SECONDS", 0)
+    phone = "+79990000106"
+
+    for _ in range(sms.MAX_REQUESTS_PER_HOUR):
+        resp = client.post("/auth/phone", json={"phone": phone})
+        assert resp.status_code == 204
+
+    resp = client.post("/auth/phone", json={"phone": phone})
+    assert resp.status_code == 429
+
+
+def test_verify_locked_out_after_too_many_wrong_attempts(client):
+    from app import sms
+
+    phone = "+79990000107"
+    client.post("/auth/phone", json={"phone": phone})
+    real_code = sms._codes[phone][0]
+    wrong_code = f"{(int(real_code) + 1) % 10000:04d}"
+
+    for _ in range(sms.MAX_VERIFY_ATTEMPTS):
+        resp = client.post("/auth/verify", json={"phone": phone, "code": wrong_code})
+        assert resp.status_code == 400
+
+    # Even the real code is now rejected -- the code was invalidated by lockout.
+    resp = client.post("/auth/verify", json={"phone": phone, "code": real_code})
     assert resp.status_code == 400
 
 
@@ -65,10 +105,12 @@ def test_missing_code_field_returns_422(client):
     assert resp.status_code == 422
 
 
-def test_second_login_for_same_phone_returns_same_user(client):
+def test_second_login_for_same_phone_returns_same_user(client, monkeypatch):
     """Verifying twice for the same phone (two separate code requests) must not create
     a duplicate user row — should return a token for the same user id both times."""
     from app import sms
+
+    monkeypatch.setattr(sms, "RESEND_COOLDOWN_SECONDS", 0)
 
     phone = "+79990000104"
     client.post("/auth/phone", json={"phone": phone})
