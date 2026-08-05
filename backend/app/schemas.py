@@ -1,19 +1,23 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models import EscrowStatus, EventStatus, GenderFilter, ParticipationStatus
+
+# Международный формат номера: опциональный "+", 10-15 цифр
+PHONE_PATTERN = r"^\+?\d{10,15}$"
+CODE_PATTERN = r"^\d{4}$"
 
 
 # --- Auth ---
 class PhoneRequest(BaseModel):
-    phone: str
+    phone: str = Field(pattern=PHONE_PATTERN)
 
 
 class VerifyRequest(BaseModel):
-    phone: str
-    code: str
+    phone: str = Field(pattern=PHONE_PATTERN)
+    code: str = Field(pattern=CODE_PATTERN)
 
 
 class TokenResponse(BaseModel):
@@ -25,6 +29,7 @@ class TokenResponse(BaseModel):
 class UserProfileUpdate(BaseModel):
     name: Optional[str] = None
     age: Optional[int] = None
+    gender: Optional[Literal["male", "female"]] = None
     city: Optional[str] = None
     avatar_url: Optional[str] = None
     interests: Optional[List[str]] = None
@@ -34,6 +39,7 @@ class UserOut(BaseModel):
     id: str
     name: Optional[str]
     age: Optional[int]
+    gender: Optional[str]
     city: Optional[str]
     avatar_url: Optional[str]
     rating_avg: float
@@ -49,6 +55,7 @@ class UserOut(BaseModel):
             id=u.id,
             name=u.name,
             age=u.age,
+            gender=u.gender,
             city=u.city,
             avatar_url=u.avatar_url,
             rating_avg=u.rating_avg,
@@ -71,14 +78,20 @@ class EventCreate(BaseModel):
     location_lat: Optional[float] = None
     location_lng: Optional[float] = None
     location_address: Optional[str] = None
-    age_min: int = 18
-    age_max: int = 99
+    age_min: int = Field(default=18, ge=0, le=120)
+    age_max: int = Field(default=99, ge=0, le=120)
     gender_filter: GenderFilter = GenderFilter.any
-    slots_total: int = 1
+    slots_total: int = Field(default=1, ge=1)
     description: str = ""
-    deposit_amount: int
+    deposit_amount: int = Field(ge=0)
 
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def check_age_range(self):
+        if self.age_min > self.age_max:
+            raise ValueError("age_min не может быть больше age_max")
+        return self
 
 
 class EventUpdate(BaseModel):

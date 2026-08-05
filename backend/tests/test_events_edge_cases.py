@@ -28,42 +28,38 @@ def test_create_event_without_auth_rejected(client):
     assert resp.status_code in (401, 403)
 
 
-def test_create_event_negative_deposit_accepted_without_validation(client):
-    """No server-side validation on deposit_amount >= 0 in schemas.EventCreate.
-    Documents that a negative deposit is currently accepted."""
+def test_create_event_negative_deposit_rejected(client):
     headers = register_user(client, "+79990000201")
     resp = client.post(
         "/events", json=make_event_payload(deposit_amount=-100), headers=headers
     )
-    assert resp.status_code == 201
-    assert resp.json()["deposit_amount"] == -100
+    assert resp.status_code == 422
 
 
-def test_create_event_zero_slots_accepted(client):
+def test_create_event_zero_slots_rejected(client):
     headers = register_user(client, "+79990000202")
     resp = client.post("/events", json=make_event_payload(slots_total=0), headers=headers)
-    assert resp.status_code == 201
+    assert resp.status_code == 422
 
 
-def test_join_event_with_zero_slots_rejected(client):
+def test_join_event_with_no_free_slots_rejected(client):
     poster = register_user(client, "+79990000203")
-    joiner = register_user(client, "+79990000204")
+    joiner1 = register_user(client, "+79990000223")
+    joiner2 = register_user(client, "+79990000204")
     event = client.post(
-        "/events", json=make_event_payload(slots_total=0), headers=poster
+        "/events", json=make_event_payload(slots_total=1), headers=poster
     ).json()
-    resp = client.post(f"/events/{event['id']}/join", headers=joiner)
+    assert client.post(f"/events/{event['id']}/join", headers=joiner1).status_code == 201
+    resp = client.post(f"/events/{event['id']}/join", headers=joiner2)
     assert resp.status_code == 400
 
 
-def test_create_event_age_min_greater_than_age_max_accepted_without_validation(client):
-    """No validation ensuring age_min <= age_max."""
+def test_create_event_age_min_greater_than_age_max_rejected(client):
     headers = register_user(client, "+79990000205")
     resp = client.post(
         "/events", json=make_event_payload(age_min=50, age_max=20), headers=headers
     )
-    assert resp.status_code == 201
-    body = resp.json()
-    assert body["age_min"] == 50 and body["age_max"] == 20
+    assert resp.status_code == 422
 
 
 def test_join_nonexistent_event_returns_404(client):
@@ -121,10 +117,7 @@ def test_leave_without_joining_returns_404(client):
     assert resp.status_code == 404
 
 
-def test_double_leave_double_decrements_slots_taken(client):
-    """Bug: leave_event does not check participation.status before setting it to
-    cancelled again, so calling /leave twice decrements slots_taken twice even
-    though only one seat was ever freed. See repro below."""
+def test_double_leave_rejected(client):
     poster = register_user(client, "+79990000217")
     joiner = register_user(client, "+79990000218")
     event = client.post(
@@ -135,14 +128,9 @@ def test_double_leave_double_decrements_slots_taken(client):
     first_leave = client.post(f"/events/{event['id']}/leave", headers=joiner)
     assert first_leave.status_code == 204
     second_leave = client.post(f"/events/{event['id']}/leave", headers=joiner)
-    # Currently returns 204 again instead of 404/400 — participation already cancelled.
-    assert second_leave.status_code == 204
+    assert second_leave.status_code == 400
 
     after = client.get(f"/events/{event['id']}", headers=poster).json()
-    # slots_taken went from 1 -> 0 after the first leave, but the second leave call
-    # does not guard against re-decrementing (only guards slots_taken > 0), so this
-    # assertion documents that it stays clamped at 0 rather than going negative —
-    # still, the double state transition happening at all is the bug worth flagging.
     assert after["slots_taken"] == 0
 
 
@@ -151,15 +139,10 @@ def test_get_nonexistent_event_returns_404(client):
     assert resp.status_code == 404
 
 
-def test_gender_and_age_filters_not_enforced_on_join(client):
-    """Bug / gap: SPEC.md section 6 defines Event.age_range and gender_filter, and
-    the event card is supposed to show them, but POST /events/{id}/join never
-    checks the joining user's age or gender against these fields. A joiner outside
-    the stated age range or excluded gender can still join."""
+def test_join_rejected_when_age_outside_range(client):
     poster = register_user(client, "+79990000219")
     joiner = register_user(client, "+79990000220")
-    # joiner sets an age well outside the event's allowed range
-    client.patch("/users/me", json={"age": 15}, headers=joiner)
+    client.patch("/users/me", json={"age": 15, "gender": "female"}, headers=joiner)
 
     event = client.post(
         "/events",
@@ -168,4 +151,34 @@ def test_gender_and_age_filters_not_enforced_on_join(client):
     ).json()
 
     resp = client.post(f"/events/{event['id']}/join", headers=joiner)
-    assert resp.status_code == 201  # documents lack of enforcement
+    assert resp.status_code == 403
+
+
+def test_join_rejected_when_gender_does_not_match_filter(client):
+    poster = register_user(client, "+79990000221")
+    joiner = register_user(client, "+79990000222")
+    client.patch("/users/me", json={"age": 25, "gender": "male"}, headers=joiner)
+
+    event = client.post(
+        "/events",
+        json=make_event_payload(age_min=18, age_max=99, gender_filter="female"),
+        headers=poster,
+    ).json()
+
+    resp = client.post(f"/events/{event['id']}/join", headers=joiner)
+    assert resp.status_code == 403
+
+
+def test_join_allowed_when_age_and_gender_match(client):
+    poster = register_user(client, "+79990000224")
+    joiner = register_user(client, "+79990000225")
+    client.patch("/users/me", json={"age": 25, "gender": "female"}, headers=joiner)
+
+    event = client.post(
+        "/events",
+        json=make_event_payload(age_min=18, age_max=99, gender_filter="female"),
+        headers=poster,
+    ).json()
+
+    resp = client.post(f"/events/{event['id']}/join", headers=joiner)
+    assert resp.status_code == 201

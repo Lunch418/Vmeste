@@ -105,16 +105,41 @@ def test_update_profile_partial_update_preserves_other_fields(client):
     assert body["age"] == 26
 
 
-def test_block_user_endpoint_does_not_persist_anything(client):
-    """Gap: POST /users/{id}/block is a documented no-op on the server (comment in
-    users.py says blocking is handled client-side for MVP). It always succeeds
-    regardless of whether the target user exists, and has no observable effect
-    (e.g. it does not prevent further messaging or event joins between the two
-    users) — this is weaker than SPEC.md section 9's "Заблокировать" profile
-    action might imply, though CHANGES.md doesn't call it out as a stub."""
+def test_block_nonexistent_user_returns_404(client):
     poster = register_user(client, "+79990000511")
     resp = client.post("/users/does-not-exist/block", headers=poster)
+    assert resp.status_code == 404
+
+
+def test_block_self_rejected(client):
+    poster = register_user(client, "+79990000513")
+    me = client.get("/users/me", headers=poster).json()
+    resp = client.post(f"/users/{me['id']}/block", headers=poster)
+    assert resp.status_code == 400
+
+
+def test_block_persists_and_prevents_joining_blocked_posters_event(client):
+    poster = register_user(client, "+79990000514")
+    blocker = register_user(client, "+79990000515")
+    poster_me = client.get("/users/me", headers=poster).json()
+
+    resp = client.post(f"/users/{poster_me['id']}/block", headers=blocker)
     assert resp.status_code == 204
+
+    event = client.post("/events", json=make_event_payload(), headers=poster).json()
+    join_resp = client.post(f"/events/{event['id']}/join", headers=blocker)
+    assert join_resp.status_code == 403
+
+
+def test_double_block_idempotent(client):
+    poster = register_user(client, "+79990000516")
+    blocker = register_user(client, "+79990000517")
+    poster_me = client.get("/users/me", headers=poster).json()
+
+    first = client.post(f"/users/{poster_me['id']}/block", headers=blocker)
+    second = client.post(f"/users/{poster_me['id']}/block", headers=blocker)
+    assert first.status_code == 204
+    assert second.status_code == 204
 
 
 def test_report_user_with_nonexistent_target_does_not_crash(client):

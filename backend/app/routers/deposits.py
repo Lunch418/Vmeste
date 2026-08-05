@@ -94,4 +94,11 @@ def get_deposit(
     deposit = db.query(Deposit).filter(Deposit.id == deposit_id).first()
     if not deposit:
         raise HTTPException(status_code=404, detail="Депозит не найден")
+
+    is_payer = deposit.payer_id == current_user.id
+    is_poster = bool(
+        deposit.participation and deposit.participation.event.poster_id == current_user.id
+    )
+    if not is_payer and not is_poster:
+        raise HTTPException(status_code=403, detail="Нет доступа к этому депозиту")
     return deposit

@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import (
+    Block,
     Event,
     EventStatus,
+    GenderFilter,
     Participation,
     ParticipationStatus,
     User,
@@ -125,6 +127,33 @@ def join_event(
     if event.slots_taken >= event.slots_total:
         raise HTTPException(status_code=400, detail="Свободных мест нет")
 
+    if current_user.age is not None and not (event.age_min <= current_user.age <= event.age_max):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Событие для возраста {event.age_min}–{event.age_max}",
+        )
+    if (
+        event.gender_filter != GenderFilter.any
+        and current_user.gender is not None
+        and current_user.gender != event.gender_filter.value
+    ):
+        raise HTTPException(status_code=403, detail="Событие ограничено по полу участников")
+
+    blocked = (
+        db.query(Block)
+        .filter(
+            (
+                (Block.blocker_id == current_user.id) & (Block.blocked_id == event.poster_id)
+            )
+            | (
+                (Block.blocker_id == event.poster_id) & (Block.blocked_id == current_user.id)
+            )
+        )
+        .first()
+    )
+    if blocked:
+        raise HTTPException(status_code=403, detail="Присоединение недоступно")
+
     existing = (
         db.query(Participation)
         .filter(Participation.event_id == event_id, Participation.user_id == current_user.id)
@@ -154,6 +183,8 @@ def leave_event(
     )
     if not participation:
         raise HTTPException(status_code=404, detail="Участие не найдено")
+    if participation.status == ParticipationStatus.cancelled:
+        raise HTTPException(status_code=400, detail="Участие уже отменено")
     event = db.query(Event).filter(Event.id == event_id).first()
     participation.status = ParticipationStatus.cancelled
     if event and event.slots_taken > 0:

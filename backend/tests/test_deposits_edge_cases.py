@@ -90,11 +90,7 @@ def test_webhook_for_nonexistent_deposit_returns_404(client):
     assert resp.status_code == 404
 
 
-def test_get_deposit_by_unrelated_user_not_forbidden(client):
-    """Bug / gap: GET /deposits/{id} only checks that the deposit exists — it never
-    verifies that current_user is the payer, the event poster, or otherwise
-    related to the participation. Any authenticated user can read any other
-    user's deposit amount and escrow status by guessing/enumerating the id."""
+def test_get_deposit_by_unrelated_user_forbidden(client):
     poster = register_user(client, "+79990000311")
     joiner = register_user(client, "+79990000312")
     stranger = register_user(client, "+79990000313")
@@ -104,7 +100,31 @@ def test_get_deposit_by_unrelated_user_not_forbidden(client):
     ).json()
 
     resp = client.get(f"/deposits/{deposit['id']}", headers=stranger)
-    assert resp.status_code == 200  # documents missing authorization check
+    assert resp.status_code == 403
+
+
+def test_get_deposit_by_payer_allowed(client):
+    poster = register_user(client, "+79990000314")
+    joiner = register_user(client, "+79990000315")
+    _, participation = _join(client, poster, joiner)
+    deposit = client.post(
+        "/deposits", json={"participation_id": participation["id"]}, headers=joiner
+    ).json()
+
+    resp = client.get(f"/deposits/{deposit['id']}", headers=joiner)
+    assert resp.status_code == 200
+
+
+def test_get_deposit_by_event_poster_allowed(client):
+    poster = register_user(client, "+79990000316")
+    joiner = register_user(client, "+79990000317")
+    _, participation = _join(client, poster, joiner)
+    deposit = client.post(
+        "/deposits", json={"participation_id": participation["id"]}, headers=joiner
+    ).json()
+
+    resp = client.get(f"/deposits/{deposit['id']}", headers=poster)
+    assert resp.status_code == 200
 
 
 def test_get_deposit_without_auth_rejected(client):

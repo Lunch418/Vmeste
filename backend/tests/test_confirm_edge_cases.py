@@ -195,11 +195,7 @@ def test_rating_negative_stars_rejected(client):
     assert resp.status_code == 422
 
 
-def test_rating_for_nonexistent_user_id_does_not_crash(client):
-    """Bug / gap: rate_participant never validates that rated_id refers to an
-    existing user before creating the Rating row — it only looks the user up
-    afterwards to update the aggregate, and silently skips the aggregate update
-    if not found. Documents that this does not crash (200/201) rather than 404."""
+def test_rating_for_nonexistent_user_id_rejected(client):
     poster = register_user(client, "+79990000423")
     joiner = register_user(client, "+79990000424")
     event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
@@ -210,11 +206,10 @@ def test_rating_for_nonexistent_user_id_does_not_crash(client):
         json={"rated_id": "does-not-exist", "stars": 5},
         headers=joiner,
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 404
 
 
-def test_self_rating_not_prevented(client):
-    """Bug / gap: nothing stops a user from rating themselves (rater_id == rated_id)."""
+def test_self_rating_rejected(client):
     poster = register_user(client, "+79990000425")
     event = client.post("/events", json=make_past_event_payload(), headers=poster).json()
     poster_me = client.get("/users/me", headers=poster).json()
@@ -224,13 +219,10 @@ def test_self_rating_not_prevented(client):
         json={"rated_id": poster_me["id"], "stars": 5},
         headers=poster,
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 400
 
 
-def test_rating_before_meeting_time_not_prevented(client):
-    """Bug / gap: rate_participant does not check event.datetime_ at all (unlike
-    the confirm endpoints), so a rating can be submitted for an event that
-    hasn't happened yet."""
+def test_rating_before_meeting_time_rejected(client):
     poster = register_user(client, "+79990000426")
     joiner = register_user(client, "+79990000427")
     event = client.post(
@@ -244,7 +236,7 @@ def test_rating_before_meeting_time_not_prevented(client):
         json={"rated_id": poster_me["id"], "stars": 4},
         headers=joiner,
     )
-    assert resp.status_code == 201
+    assert resp.status_code == 400
 
 
 def test_confirm_selfie_nonexistent_event_returns_404(client):

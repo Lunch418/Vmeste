@@ -55,6 +55,7 @@ class User(Base):
     phone = Column(String, unique=True, nullable=False, index=True)
     name = Column(String, nullable=True)
     age = Column(Integer, nullable=True)
+    gender = Column(String, nullable=True)  # "male" | "female" | None
     city = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
     rating_avg = Column(Float, default=0.0)
@@ -167,4 +168,13 @@ class Report(Base):
     reported_id = Column(String, ForeignKey("users.id"), nullable=False)
     event_id = Column(String, ForeignKey("events.id"), nullable=True)
     reason = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Block(Base):
+    __tablename__ = "blocks"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    blocker_id = Column(String, ForeignKey("users.id"), nullable=False)
+    blocked_id = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

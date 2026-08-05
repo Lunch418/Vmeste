@@ -117,6 +117,14 @@ def rate_participant(
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Событие не найдено")
+    if datetime.utcnow() < event.datetime_:
+        raise HTTPException(status_code=400, detail="Оценка доступна только после встречи")
+    if payload.rated_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Нельзя оценить самого себя")
+
+    rated_user = db.query(User).filter(User.id == payload.rated_id).first()
+    if not rated_user:
+        raise HTTPException(status_code=404, detail="Оцениваемый пользователь не найден")
 
     rating = Rating(
         event_id=event_id,
@@ -128,12 +136,10 @@ def rate_participant(
     db.add(rating)
     db.flush()
 
-    rated_user = db.query(User).filter(User.id == payload.rated_id).first()
-    if rated_user:
-        prior = db.query(Rating).filter(Rating.rated_id == rated_user.id).all()
-        total_stars = sum(r.stars for r in prior)
-        rated_user.rating_avg = round(total_stars / len(prior), 2)
-        rated_user.meetings_count += 1
+    prior = db.query(Rating).filter(Rating.rated_id == rated_user.id).all()
+    total_stars = sum(r.stars for r in prior)
+    rated_user.rating_avg = round(total_stars / len(prior), 2)
+    rated_user.meetings_count += 1
 
     db.commit()
     return {"status": "rated"}

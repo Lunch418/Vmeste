@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Report, User
+from app.models import Block, Report, User
 from app.schemas import ReportCreate, UserOut, UserProfileUpdate
 from app.security import get_current_user
 
@@ -57,7 +57,23 @@ def report_user(
 
 
 @router.post("/{user_id}/block", status_code=204)
-def block_user(user_id: str, current_user: User = Depends(get_current_user)):
-    # MVP: блокировка на уровне ленты/чата реализуется на фронтенде через
-    # локальный blocklist пользователя; серверная модель блокировок — Этап 2.
+def block_user(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Нельзя заблокировать самого себя")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    existing = (
+        db.query(Block)
+        .filter(Block.blocker_id == current_user.id, Block.blocked_id == user_id)
+        .first()
+    )
+    if not existing:
+        db.add(Block(blocker_id=current_user.id, blocked_id=user_id))
+        db.commit()
     return None

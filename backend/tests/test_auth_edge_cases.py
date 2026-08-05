@@ -1,16 +1,18 @@
 from tests.conftest import register_user
 
 
-def test_empty_phone_accepted_without_validation(client):
-    """No server-side phone format validation exists (schemas.PhoneRequest.phone: str).
-    Documents current behavior: an empty string is accepted and a code is generated for it.
-    """
+def test_empty_phone_rejected(client):
     resp = client.post("/auth/phone", json={"phone": ""})
-    assert resp.status_code == 204
+    assert resp.status_code == 422
 
 
-def test_garbage_phone_accepted_without_validation(client):
+def test_garbage_phone_rejected(client):
     resp = client.post("/auth/phone", json={"phone": "not-a-phone-at-all!!"})
+    assert resp.status_code == 422
+
+
+def test_valid_phone_accepted(client):
+    resp = client.post("/auth/phone", json={"phone": "+79990000199"})
     assert resp.status_code == 204
 
 
